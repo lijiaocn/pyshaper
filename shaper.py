@@ -89,7 +89,7 @@ def fill_even_rates(nodes, parent):
         else:
             total_rate -= node['rate']
     if total_rate < 0:
-        raise Exception('class %s has a lower rate than the sum of rates of its children' % node['name'])
+        raise Exception('class %s has a lower rate than the sum of rates of its children' % parent['name'])
     if len(to_fill):
         even_rate = total_rate // len(to_fill)
         for node in to_fill:

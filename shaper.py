@@ -3,9 +3,11 @@
 
 from __future__ import division
 
+import getopt
+import pickle
 import re
 import sys
-from   uuid import uuid4
+import uuid
 import yaml
 
 def parse_aliases(config):
@@ -60,7 +62,7 @@ def parse_node(aliases, node, parent):
                 range_v = child['range']
                 direction, start_ip, end_ip = range_v.split()
                 for ip_int in range(ip_to_int(start_ip), ip_to_int(end_ip) + 1):
-                    child_name = str(uuid4())
+                    child_name = uuid.uuid4()
                     aliases[child_name] = [direction + ' ' + int_to_ip(ip_int)]
                     children.append(parse_node(aliases, {'name': child_name,
                                                          'rate': child['rate']}, n))
@@ -177,7 +179,16 @@ def execute(device_name, aliases, node):
         print 'qdisc add dev %s parent 1:%d handle %d: sfq perturb 10' % args
 
 def main():
-    config_documents = [doc for doc in yaml.safe_load_all(sys.stdin)]
+    opts, args = getopt.gnu_getopt(sys.argv[1:], 'n:')
+    names_file = None
+    for o, a in opts:
+        if o == '-n':
+            names_file = a
+    if len(args) > 0:
+        config_file = open(args[0], 'rb')
+    else:
+        config_file = sys.stdin
+    config_documents = [doc for doc in yaml.safe_load_all(config_file)]
     if len(config_documents) > 1:
         raise Exception('configuration file should be a single YAML document')
     device_name, aliases, tree = parse_config(config_documents[0])
@@ -186,6 +197,22 @@ def main():
     print 'qdisc add dev %s root handle 1: htb r2q 1' % device_name
     execute(device_name, aliases, tree)
     print 'EOF'
+    if names_file is not None:
+        names_file = open(names_file, 'wb')
+        pickle.dump(collect_names({}, aliases, tree), names_file)
+        names_file.close()
+
+def collect_names(names, aliases, node):
+    node_id = '1:' + str(node['id'])
+    if isinstance(node['name'], uuid.UUID):
+        name = aliases[node['name']][0]
+    else:
+        name = node['name']
+    names[node_id] = name
+    if 'children' in node:
+        for child in node['children']:
+            collect_names(names, aliases, child)
+    return names
 
 if __name__ == '__main__':
     try:
